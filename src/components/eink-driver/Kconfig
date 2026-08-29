@@ -1,0 +1,41 @@
+menu "E-Ink Display Configuration"
+
+config DEBUG_MODE
+	bool "Turn on and off the LOGI"
+	default false
+
+config SPI_FREQUENCY
+    int "SPI Frequency in MHZ"
+    range 1 20
+    default 1
+    help
+        Choose a value between 1-20
+config EINK_PIN_MOSI
+    int "MOSI Pin"
+    default 18
+
+config EINK_PIN_SCLK
+    int "SCLK Pin"
+    default 19
+
+config EINK_PIN_CS
+    int "CS Pin"
+    default 17
+
+config EINK_PIN_RST
+    int "RST Pin"
+    default 16
+
+config EINK_PIN_DC
+    int "DC Pin"
+    default 20
+
+config EINK_PIN_BUSY
+    int "BUSY Pin"
+    default 22
+
+config EINK_PIN_PWR
+	int "PWR Pin"
+	default 23
+
+endmenu

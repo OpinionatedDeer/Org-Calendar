@@ -1,6 +1,7 @@
-#include <stdio.h>
+#include "initialize.h"
 
 void app_main(void)
 {
+	printf("Test");
 
 }

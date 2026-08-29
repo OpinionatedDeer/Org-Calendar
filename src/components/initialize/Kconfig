@@ -1,0 +1,15 @@
+menu "Initialization Configuration"
+config  INIT_PIN_MOSI
+	int "MOSI PIN"
+	default 18
+
+config INIT_PIN_SCLK
+    int "SCLK Pin"
+    default 19
+
+config  INIT_PIN_MISO
+	int "MISO PIN"
+	default 20
+
+endmenu
+
