@@ -4,7 +4,7 @@ config DEBUG_MODE
 	bool "Turn on and off the LOGI"
 	default false
 
-config SPI_FREQUENCY
+config EINK_SPI_FREQUENCY
     int "SPI Frequency in MHZ"
     range 1 20
     default 1

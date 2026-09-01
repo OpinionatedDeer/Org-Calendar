@@ -52,6 +52,7 @@ static spi_device_handle_t eink_spi = NULL;
 #define PIN_BUSY CONFIG_EINK_PIN_BUSY
 #define PIN_DC   CONFIG_EINK_PIN_DC
 #define PIN_PWR  CONFIG_EINK_PIN_PWR
+#define SPI_FREQUENCY CONFIG_SPI_FREQUENCY
 
 
 
@@ -186,7 +187,7 @@ esp_err_t eink_init(spi_host_device_t SPI_HOST_DEVICE) {
     /* --- SPI Device Initialization --- */
     if (eink_spi == NULL) {
         spi_device_interface_config_t devcfg = {
-            .clock_speed_hz = CONFIG_SPI_FREQUENCY * 1000 * 1000,
+            .clock_speed_hz = SPI_FREQUENCY* 1000 * 1000,
             .mode = 0,
             .spics_io_num = PIN_CS,
             .queue_size = 1,

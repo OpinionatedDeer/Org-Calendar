@@ -1,1 +1,19 @@
+menu "FLASH Configuration"
 
+
+config DEBUG_MODE
+	bool "Turn on and off the LOGI"
+	default false
+
+config FLASH_SPI_FREQUENCY
+    int "SPI Frequency in MHZ"
+    range 1 80
+    default 40
+    help
+        Choose a value between 1-80
+
+config FLASH_CS
+    int "CS Pin"
+    default 17
+
+endmenu
