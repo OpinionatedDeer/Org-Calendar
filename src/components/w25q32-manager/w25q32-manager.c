@@ -12,14 +12,19 @@
 #include "esp_flash_spi_init.h"
 #include "esp_partition.h"
 #include "esp_littlefs.h"
+#include "nvs_flash.h"
 
 #define PIN_CS CONFIG_FLASH_CS
 #define	SPI_FREQUENCY CONFIG_FLASH_SPI_FREQUENCY
+#define FORMAT_PARTITION true
 
 
 static const char *TAG = "w25q32-manager";
 #define W25Q32_SIZE    (4 * 1024 * 1024)
-
+#define NVS_OFFSET 0
+#define DATA_OFFSET
+#define NVS_SIZE (512*1024)
+#define DATA_SIZE  (W25Q32_SIZE-NVS_SIZE)
 
 esp_err_t w25q32_manager_init(spi_host_device_t spi_host_device){
 
@@ -65,29 +70,16 @@ esp_err_t w25q32_manager_init(spi_host_device_t spi_host_device){
         return ESP_ERR_INVALID_SIZE;
     }
 
-    /*
-     * Register the existing partition.
-     *
-     * This does NOT erase or format the flash.
-     */
-    ret = esp_partition_register_external(
-        chip,
-        0,
-        W25Q32_SIZE,
-        "data",
-        ESP_PARTITION_TYPE_DATA,
-        ESP_PARTITION_SUBTYPE_DATA_LITTLEFS,
-        NULL
-    );
+	const esp_partition_t * nvs_partition = NULL, * littlefs_partition = NULL;
 
     ret = esp_partition_register_external(
         chip,
         0,
-        W25Q32_SIZE,
+        NVS_SIZE,
         "settings",
         ESP_PARTITION_TYPE_DATA,
         ESP_PARTITION_SUBTYPE_DATA_NVS,
-        NULL
+		&nvs_partition
     );
 
     if (ret != ESP_OK) {
@@ -96,8 +88,34 @@ esp_err_t w25q32_manager_init(spi_host_device_t spi_host_device){
         return ret;
     }
 
-    // Mount existing LittleFS filesystem.
-    // IMPORTANT: format_if_mount_failed = false
+    ret = esp_partition_register_external(
+        chip,
+        NVS_SIZE,
+        DATA_SIZE,
+        "data",
+        ESP_PARTITION_TYPE_DATA,
+        ESP_PARTITION_SUBTYPE_DATA_LITTLEFS,
+        &littlefs_partition
+    );
+
+    if (ret != ESP_OK) {
+        ESP_LOGE(TAG, "Failed to register external partition: %s",
+                 esp_err_to_name(ret));
+        return ret;
+    }
+
+	if(FORMAT_PARTITION){
+		esp_flash_erase_region(chip, 0, NVS_SIZE);
+		esp_littlefs_format_partition(littlefs_partition);
+	}
+
+	ret = nvs_flash_init_partition_ptr(nvs_partition);
+    if (ret != ESP_OK) {
+        ESP_LOGE(TAG, "Failed to register or mount NVS: %s",
+                 esp_err_to_name(ret));
+        return ret;
+    }
+
     esp_vfs_littlefs_conf_t conf = {
         .base_path = "/data",
         .partition_label = "data",
@@ -112,24 +130,6 @@ esp_err_t w25q32_manager_init(spi_host_device_t spi_host_device){
                  esp_err_to_name(ret));
         return ret;
     }
-
-    size_t total = 0;
-    size_t used = 0;
-
-    ret = esp_littlefs_info("storage", &total, &used);
-    if (ret != ESP_OK) {
-        ESP_LOGE(TAG, "Failed to read LittleFS info: %s",
-                 esp_err_to_name(ret));
-
-        esp_vfs_littlefs_unregister("storage");
-        return ret;
-    }
-
-    ESP_LOGI(TAG,
-             "W25Q32 LittleFS mounted: total=%u, used=%u, free=%u",
-             (unsigned)total,
-             (unsigned)used,
-             (unsigned)(total - used));
 
     return ESP_OK;
 }
