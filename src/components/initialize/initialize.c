@@ -5,8 +5,10 @@
 #include "sdkconfig.h"
 #include "esp_log.h"
 #include "eink-driver.h"
+#include "w25q32-manager.h"
+// #include "w25q32-test.c" Made for testing if spi was working or not. It was working.
 
-static const char *TAG = "initialize";
+// static const char *TAG = "initialize";
 static spi_host_device_t spi_host = SPI2_HOST;
 static bool bus_inited = false;
 
@@ -30,11 +32,14 @@ esp_err_t initialize(void){
         };
         ret = spi_bus_initialize(spi_host, &buscfg, SPI_DMA_CH_AUTO);
         if (ret != ESP_OK && ret != ESP_ERR_INVALID_STATE) {
-            ESP_LOGE(TAG, "spi_bus_initialize failed: %s", esp_err_to_name(ret));
+            // ESP_LOGE(TAG, "spi_bus_initialize failed: %s", esp_err_to_name(ret));
             return ret;
         }
         bus_inited = true;
-		eink_init(spi_host);
+		// eink_init(spi_host);
+
+		w25q32_manager_init(spi_host);
+
     }
 	return ESP_OK;
 }

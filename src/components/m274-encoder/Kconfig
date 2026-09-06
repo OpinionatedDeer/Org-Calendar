@@ -1,0 +1,21 @@
+menu "m274 encoder config"
+
+
+config DEBUG_MODE
+	bool "Turn on and off the LOGI"
+	default false
+
+config PIN_A
+    int "PIN_A"
+    default 02
+
+config PIN_B
+    int "PIN_B"
+    default 01
+
+config PIN_SW
+    int "PIN_SW"
+    default 00
+
+
+endmenu
