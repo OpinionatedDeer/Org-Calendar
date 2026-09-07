@@ -14,6 +14,6 @@ config FLASH_SPI_FREQUENCY
 
 config FLASH_CS
     int "CS Pin"
-    default 17
+    default 21
 
 endmenu
