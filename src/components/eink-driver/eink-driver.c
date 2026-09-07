@@ -23,8 +23,10 @@
 #include "esp_err.h"
 #include "sdkconfig.h"
 #include "esp_timer.h"
+#include "driver/spi_common.h"
 
 #include "eink-driver.h"
+#include "hardware_lock.h"
 
 static const char *TAG = "EINK";
 static spi_device_handle_t eink_spi = NULL;
@@ -40,9 +42,17 @@ static spi_device_handle_t eink_spi = NULL;
     if (__err_rc != ESP_OK) {                    \
         ESP_LOGE(TAG, "%s failed: %s",           \
                  #x, esp_err_to_name(__err_rc)); \
-        return __err_rc;                         \
+        ret = __err_rc;                          \
+        goto cleanup;                            \
     }                                            \
 } while(0)
+
+
+#if CONFIG_DEBUG_MODE
+#define DEBUG_LOGI(...) ESP_LOGI(TAG, __VA_ARGS__)
+#else
+#define DEBUG_LOGI(...) do { } while (0)
+#endif
 
 // Pin assignments from menuconfig
 #define PIN_MOSI CONFIG_EINK_PIN_MOSI
@@ -67,13 +77,14 @@ static spi_device_handle_t eink_spi = NULL;
  * 20 ms high). The reset pulse clears the controller's internal state,
  * including both frame buffers (0x24 and 0x26).
  */
-static inline void eink_reset(void){
+static inline esp_err_t eink_reset(void){
     gpio_set_level(PIN_RST, 1);
     vTaskDelay(pdMS_TO_TICKS(20));
     gpio_set_level(PIN_RST, 0);
     vTaskDelay(pdMS_TO_TICKS(20));
     gpio_set_level(PIN_RST, 1);
     vTaskDelay(pdMS_TO_TICKS(20));
+    return ESP_OK;
 }
 
 /**
@@ -93,6 +104,7 @@ static inline bool eink_is_busy(void){
  * Sets DC low (command mode), transmits 8 bits.
  */
 static esp_err_t eink_write_cmd(uint8_t cmd){
+    esp_err_t ret = ESP_OK;
     gpio_set_level(PIN_DC, 0);
 
     spi_transaction_t t = {
@@ -100,7 +112,8 @@ static esp_err_t eink_write_cmd(uint8_t cmd){
         .tx_buffer = &cmd,
     };
 
-    return spi_device_transmit(eink_spi, &t);
+    ret = spi_device_transmit(eink_spi, &t);
+    return ret;
 }
 
 /**
@@ -115,6 +128,7 @@ static esp_err_t eink_write_cmd(uint8_t cmd){
  * @param len   number of bytes to send
  */
 static esp_err_t eink_write_data(const uint8_t *data, size_t len){
+    esp_err_t ret = ESP_OK;
     gpio_set_level(PIN_DC, 1);
 
     spi_transaction_t t = {
@@ -122,7 +136,8 @@ static esp_err_t eink_write_data(const uint8_t *data, size_t len){
         .tx_buffer = data,
     };
 
-    return spi_device_transmit(eink_spi, &t);
+    ret = spi_device_transmit(eink_spi, &t);
+    return ret;
 }
 
 /**
@@ -133,6 +148,7 @@ static esp_err_t eink_write_data(const uint8_t *data, size_t len){
  * the hood but has the same effect as EPD_3IN97_SendData().
  */
 static esp_err_t eink_write_data_single(const uint8_t data){
+    esp_err_t ret = ESP_OK;
     gpio_set_level(PIN_DC, 1);
 
     spi_transaction_t t = {
@@ -140,7 +156,8 @@ static esp_err_t eink_write_data_single(const uint8_t data){
         .tx_buffer = &data,
     };
 
-    return spi_device_transmit(eink_spi, &t);
+    ret = spi_device_transmit(eink_spi, &t);
+    return ret;
 }
 
 /* ------------------------------------------------------------------ */
@@ -148,8 +165,9 @@ static esp_err_t eink_write_data_single(const uint8_t data){
 /* ------------------------------------------------------------------ */
 
 esp_err_t eink_init(spi_host_device_t SPI_HOST_DEVICE) {
-
-    esp_err_t ret;
+    esp_err_t ret = ESP_OK;
+	ESP_LOGI(TAG, "Initialize start");
+    hardware_lock_acquire();
 
     /* --- Configure control pins --- */
     gpio_config_t out_cfg = {
@@ -165,6 +183,7 @@ esp_err_t eink_init(spi_host_device_t SPI_HOST_DEVICE) {
     if (ret != ESP_OK) {
         ESP_LOGE(TAG, "output gpio config failed: %s",
                  esp_err_to_name(ret));
+        hardware_lock_release();
         return ret;
     }
     gpio_config_t in_cfg = {
@@ -178,6 +197,7 @@ esp_err_t eink_init(spi_host_device_t SPI_HOST_DEVICE) {
     if (ret != ESP_OK) {
         ESP_LOGE(TAG, "busy gpio config failed: %s",
                  esp_err_to_name(ret));
+        hardware_lock_release();
         return ret;
     }
     gpio_set_level(PIN_RST, 1);
@@ -198,11 +218,13 @@ esp_err_t eink_init(spi_host_device_t SPI_HOST_DEVICE) {
         if (ret != ESP_OK) {
             ESP_LOGE(TAG, "spi_bus_add_device failed: %s",
                      esp_err_to_name(ret));
+            hardware_lock_release();
             return ret;
         }
     }
 
     ESP_LOGI(TAG, "E-Ink SPI initialized");
+    hardware_lock_release();
     return ESP_OK;
 }
 
@@ -219,6 +241,7 @@ esp_err_t eink_init(spi_host_device_t SPI_HOST_DEVICE) {
  * @return ESP_OK, or ESP_ERR_TIMEOUT if BUSY stays high > 10 s
  */
 static esp_err_t eink_wait_busy(void){
+    esp_err_t ret = ESP_OK;
     int64_t start = esp_timer_get_time() / 1000;
     vTaskDelay(pdMS_TO_TICKS(100));
 
@@ -227,13 +250,15 @@ static esp_err_t eink_wait_busy(void){
 
         if ((esp_timer_get_time() / 1000) - start > 10000) {
             ESP_LOGE(TAG, "BUSY timeout");
-            return ESP_ERR_TIMEOUT;
+            ret = ESP_ERR_TIMEOUT;
+            goto cleanup;
         }
     }
 
     int64_t elapsed = (esp_timer_get_time() / 1000) - start;
     ESP_LOGI(TAG, "BUSY released after %lld.%03llds", elapsed / 1000, elapsed % 1000);
-    return ESP_OK;
+cleanup:
+    return ret;
 }
 
 /**
@@ -250,11 +275,14 @@ static esp_err_t eink_wait_busy(void){
  */
 static esp_err_t eink_turn_on_display(uint8_t mode)
 {
+    esp_err_t ret = ESP_OK;
     EINK_CHECK(eink_write_cmd(0x22));
     EINK_CHECK(eink_write_data_single(mode));
     EINK_CHECK(eink_write_cmd(0x20));
 
-    return eink_wait_busy();
+    ret = eink_wait_busy();
+cleanup:
+    return ret;
 }
 
 /* ------------------------------------------------------------------ */
@@ -262,6 +290,8 @@ static esp_err_t eink_turn_on_display(uint8_t mode)
 /* ------------------------------------------------------------------ */
 
 esp_err_t eink_initialize(void){
+    esp_err_t ret = ESP_OK;
+    hardware_lock_acquire();
     eink_reset();
     EINK_CHECK(eink_wait_busy());
     EINK_CHECK(eink_write_cmd(0x12)); // SWRESET
@@ -297,10 +327,15 @@ esp_err_t eink_initialize(void){
     EINK_CHECK(eink_write_cmd(0x4F));
     EINK_CHECK(eink_write_data((uint8_t[]){0x00,0x00},2));
     EINK_CHECK(eink_wait_busy());
-    return ESP_OK;
+    ret = ESP_OK;
+cleanup:
+    hardware_lock_release();
+    return ret;
 }
 
 esp_err_t eink_initialize_fast(void){
+    esp_err_t ret = ESP_OK;
+    hardware_lock_acquire();
     eink_reset();
     EINK_CHECK(eink_wait_busy());
     EINK_CHECK(eink_write_cmd(0x12)); // SWRESET
@@ -343,10 +378,15 @@ esp_err_t eink_initialize_fast(void){
 
     EINK_CHECK(eink_write_cmd(0x1A)); // Fast update (~1.5 s)
     EINK_CHECK(eink_write_data_single(0x6A));
-    return ESP_OK;
+    ret = ESP_OK;
+cleanup:
+    hardware_lock_release();
+    return ret;
 }
 
 esp_err_t eink_initialize_gray(void){
+    esp_err_t ret = ESP_OK;
+    hardware_lock_acquire();
     eink_reset();
     EINK_CHECK(eink_wait_busy());
     EINK_CHECK(eink_write_cmd(0x12)); // SWRESET
@@ -386,7 +426,10 @@ esp_err_t eink_initialize_gray(void){
 
     EINK_CHECK(eink_write_cmd(0x1A)); // 4-gray
     EINK_CHECK(eink_write_data_single(0x5A));
-    return ESP_OK;
+    ret = ESP_OK;
+cleanup:
+    hardware_lock_release();
+    return ret;
 }
 
 /* ------------------------------------------------------------------ */
@@ -417,6 +460,7 @@ static uint16_t eink_width_bytes(void) {
  * @param fill   byte value to fill (0xFF = white, 0x00 = black)
  */
 static esp_err_t eink_send_clear_row(uint8_t cmd, uint16_t width, uint16_t height, uint8_t fill) {
+    esp_err_t ret = ESP_OK;
     uint8_t row[width];
     memset(row, fill, width);
     EINK_CHECK(eink_write_cmd(cmd));
@@ -425,11 +469,14 @@ static esp_err_t eink_send_clear_row(uint8_t cmd, uint16_t width, uint16_t heigh
         EINK_CHECK(eink_write_data(row, width));
         if ((esp_timer_get_time() / 1000) - start > 10000) {
             ESP_LOGE(TAG, "send_clear_row timeout");
-            return ESP_ERR_TIMEOUT;
+            ret = ESP_ERR_TIMEOUT;
+            goto cleanup;
         }
         vTaskDelay(pdMS_TO_TICKS(1));
     }
-    return ESP_OK;
+    ret = ESP_OK;
+cleanup:
+    return ret;
 }
 
 /**
@@ -441,6 +488,7 @@ static esp_err_t eink_send_clear_row(uint8_t cmd, uint16_t width, uint16_t heigh
  * resets the address counters to 0.
  */
 static esp_err_t eink_reset_window(void) {
+    esp_err_t ret = ESP_OK;
     EINK_CHECK(eink_write_cmd(0x44));
     EINK_CHECK(eink_write_data((uint8_t[]){0x00, 0x00}, 2));
     EINK_CHECK(eink_write_data_single((DISPLAY_WIDTH - 1) % 256));
@@ -455,7 +503,9 @@ static esp_err_t eink_reset_window(void) {
     EINK_CHECK(eink_write_data((uint8_t[]){0x00, 0x00}, 2));
     EINK_CHECK(eink_write_cmd(0x4F));
     EINK_CHECK(eink_write_data((uint8_t[]){0x00, 0x00}, 2));
-    return ESP_OK;
+    ret = ESP_OK;
+cleanup:
+    return ret;
 }
 
 /* ------------------------------------------------------------------ */
@@ -463,21 +513,31 @@ static esp_err_t eink_reset_window(void) {
 /* ------------------------------------------------------------------ */
 
 esp_err_t eink_clear(void){
+    esp_err_t ret = ESP_OK;
     uint16_t w = eink_width_bytes();
+    hardware_lock_acquire();
     EINK_CHECK(eink_reset_window());
     EINK_CHECK(eink_send_clear_row(0x24, w, DISPLAY_HEIGHT, 0xFF));
     EINK_CHECK(eink_send_clear_row(0x26, w, DISPLAY_HEIGHT, 0xFF));
     EINK_CHECK(eink_turn_on_display(0xF7));
-    return ESP_OK;
+    ret = ESP_OK;
+cleanup:
+    hardware_lock_release();
+    return ret;
 }
 
 esp_err_t eink_clear_black(void){
+    esp_err_t ret = ESP_OK;
     uint16_t w = eink_width_bytes();
+    hardware_lock_acquire();
     EINK_CHECK(eink_reset_window());
     EINK_CHECK(eink_send_clear_row(0x24, w, DISPLAY_HEIGHT, 0x00));
     EINK_CHECK(eink_send_clear_row(0x26, w, DISPLAY_HEIGHT, 0x00));
     EINK_CHECK(eink_turn_on_display(0xF7));
-    return ESP_OK;
+    ret = ESP_OK;
+cleanup:
+    hardware_lock_release();
+    return ret;
 }
 
 /* ------------------------------------------------------------------ */
@@ -496,17 +556,21 @@ esp_err_t eink_clear_black(void){
  * @param height number of rows (= 480)
  */
 static esp_err_t eink_send_image(uint8_t cmd, const uint8_t *image, uint16_t width, uint16_t height) {
+    esp_err_t ret = ESP_OK;
     EINK_CHECK(eink_write_cmd(cmd));
     int64_t start = esp_timer_get_time() / 1000;
     for (uint16_t j = 0; j < height; j++) {
         EINK_CHECK(eink_write_data(&image[j * width], width));
         if ((esp_timer_get_time() / 1000) - start > 10000) {
             ESP_LOGE(TAG, "send_image timeout");
-            return ESP_ERR_TIMEOUT;
+            ret = ESP_ERR_TIMEOUT;
+            goto cleanup;
         }
         vTaskDelay(pdMS_TO_TICKS(1));
     }
-    return ESP_OK;
+    ret = ESP_OK;
+cleanup:
+    return ret;
 }
 
 /* ------------------------------------------------------------------ */
@@ -514,37 +578,57 @@ static esp_err_t eink_send_image(uint8_t cmd, const uint8_t *image, uint16_t wid
 /* ------------------------------------------------------------------ */
 
 esp_err_t eink_display(const uint8_t *image) {
+    esp_err_t ret = ESP_OK;
     uint16_t w = eink_width_bytes();
+    hardware_lock_acquire();
     EINK_CHECK(eink_reset_window());
     EINK_CHECK(eink_send_image(0x24, image, w, DISPLAY_HEIGHT));
     EINK_CHECK(eink_turn_on_display(0xF7));
-    return ESP_OK;
+    ret = ESP_OK;
+cleanup:
+    hardware_lock_release();
+    return ret;
 }
 
 esp_err_t eink_display_base(const uint8_t *image) {
+    esp_err_t ret = ESP_OK;
     uint16_t w = eink_width_bytes();
+    hardware_lock_acquire();
     EINK_CHECK(eink_reset_window());
     EINK_CHECK(eink_send_image(0x24, image, w, DISPLAY_HEIGHT));
     EINK_CHECK(eink_send_image(0x26, image, w, DISPLAY_HEIGHT));
     EINK_CHECK(eink_turn_on_display(0xF7));
-    return ESP_OK;
+    ret = ESP_OK;
+cleanup:
+    hardware_lock_release();
+    return ret;
 }
 
 esp_err_t eink_display_fast(const uint8_t *image) {
+    esp_err_t ret = ESP_OK;
     uint16_t w = eink_width_bytes();
+    hardware_lock_acquire();
     EINK_CHECK(eink_reset_window());
     EINK_CHECK(eink_send_image(0x24, image, w, DISPLAY_HEIGHT));
     EINK_CHECK(eink_turn_on_display(0xD7));
-    return ESP_OK;
+    ret = ESP_OK;
+cleanup:
+    hardware_lock_release();
+    return ret;
 }
 
 esp_err_t eink_display_fast_base(const uint8_t *image) {
+    esp_err_t ret = ESP_OK;
     uint16_t w = eink_width_bytes();
+    hardware_lock_acquire();
     EINK_CHECK(eink_reset_window());
     EINK_CHECK(eink_send_image(0x24, image, w, DISPLAY_HEIGHT));
     EINK_CHECK(eink_send_image(0x26, image, w, DISPLAY_HEIGHT));
     EINK_CHECK(eink_turn_on_display(0xD7));
-    return ESP_OK;
+    ret = ESP_OK;
+cleanup:
+    hardware_lock_release();
+    return ret;
 }
 
 /**
@@ -556,8 +640,10 @@ esp_err_t eink_display_fast_base(const uint8_t *image) {
  * due to the blend logic).
  */
 esp_err_t eink_display_window(const uint8_t *image, uint16_t xstart, uint16_t ystart, uint16_t img_w, uint16_t img_h) {
+    esp_err_t ret = ESP_OK;
     uint16_t w = eink_width_bytes();
     uint8_t row[w];
+    hardware_lock_acquire();
     EINK_CHECK(eink_write_cmd(0x24));
     for (uint16_t i = 0; i < DISPLAY_HEIGHT; i++) {
         for (uint16_t j = 0; j < w; j++) {
@@ -570,15 +656,17 @@ esp_err_t eink_display_window(const uint8_t *image, uint16_t xstart, uint16_t ys
         vTaskDelay(pdMS_TO_TICKS(1));
     }
     EINK_CHECK(eink_turn_on_display(0xF7));
-    return ESP_OK;
+    ret = ESP_OK;
+cleanup:
+    hardware_lock_release();
+    return ret;
 }
 
-/**
- * @brief Same as eink_display_window but writes both 0x24 and 0x26
- */
 esp_err_t eink_display_window_base(const uint8_t *image, uint16_t xstart, uint16_t ystart, uint16_t img_w, uint16_t img_h) {
+    esp_err_t ret = ESP_OK;
     uint16_t w = eink_width_bytes();
     uint8_t row[w];
+    hardware_lock_acquire();
     for (int pass = 0; pass < 2; pass++) {
         EINK_CHECK(eink_write_cmd(pass == 0 ? 0x24 : 0x26));
         for (uint16_t i = 0; i < DISPLAY_HEIGHT; i++) {
@@ -593,7 +681,10 @@ esp_err_t eink_display_window_base(const uint8_t *image, uint16_t xstart, uint16
         }
     }
     EINK_CHECK(eink_turn_on_display(0xF7));
-    return ESP_OK;
+    ret = ESP_OK;
+cleanup:
+    hardware_lock_release();
+    return ret;
 }
 
 /**
@@ -624,6 +715,7 @@ esp_err_t eink_display_window_base(const uint8_t *image, uint16_t xstart, uint16
  * @param Yend   pixel Y of the window end (exclusive)
  */
 esp_err_t eink_display_partial(const uint8_t *image, uint16_t Xstart, uint16_t Ystart, uint16_t Xend, uint16_t Yend) {
+    esp_err_t ret = ESP_OK;
     if (Xend <= Xstart || Yend <= Ystart) {
         ESP_LOGE(TAG, "invalid partial: Xend<=Xstart or Yend<=Ystart");
         return ESP_ERR_INVALID_ARG;
@@ -641,6 +733,7 @@ esp_err_t eink_display_partial(const uint8_t *image, uint16_t Xstart, uint16_t Y
     Xend -= 1;
     Yend -= 1;
 
+    hardware_lock_acquire();
     eink_reset();
 
     EINK_CHECK(eink_write_cmd(0x18));
@@ -676,7 +769,10 @@ esp_err_t eink_display_partial(const uint8_t *image, uint16_t Xstart, uint16_t Y
     }
 
     EINK_CHECK(eink_turn_on_display(0xFF));
-    return ESP_OK;
+    ret = ESP_OK;
+cleanup:
+    hardware_lock_release();
+    return ret;
 }
 
 /* ------------------------------------------------------------------ */
@@ -747,8 +843,10 @@ static void gray_convert_pass(const uint8_t *image, uint8_t *row, uint16_t w, ui
 }
 
 esp_err_t eink_display_4gray(const uint8_t *image) {
+    esp_err_t ret = ESP_OK;
     uint16_t w = eink_width_bytes();
     uint8_t row[w];
+    hardware_lock_acquire();
     EINK_CHECK(eink_reset_window());
     for (int pass = 0; pass < 2; pass++) {
         EINK_CHECK(eink_write_cmd(pass == 0 ? 0x24 : 0x26));
@@ -759,7 +857,10 @@ esp_err_t eink_display_4gray(const uint8_t *image) {
         vTaskDelay(pdMS_TO_TICKS(1));
     }
     EINK_CHECK(eink_turn_on_display(0xD7));
-    return ESP_OK;
+    ret = ESP_OK;
+cleanup:
+    hardware_lock_release();
+    return ret;
 }
 
 /* ------------------------------------------------------------------ */
@@ -767,14 +868,20 @@ esp_err_t eink_display_4gray(const uint8_t *image) {
 /* ------------------------------------------------------------------ */
 
 esp_err_t eink_sleep(void) {
+    esp_err_t ret = ESP_OK;
+    hardware_lock_acquire();
     EINK_CHECK(eink_write_cmd(0x10));
     EINK_CHECK(eink_write_data_single(0x01));
     vTaskDelay(pdMS_TO_TICKS(2100));
 	gpio_set_level(PIN_PWR, 0);
-    return ESP_OK;
+    ret = ESP_OK;
+cleanup:
+    hardware_lock_release();
+    return ret;
 }
 
 esp_err_t eink_wake(void){
-	gpio_set_level(PIN_PWR, 1);
-	return ESP_OK;
+    esp_err_t ret = ESP_OK;
+    gpio_set_level(PIN_PWR, 1);
+    return ret;
 }

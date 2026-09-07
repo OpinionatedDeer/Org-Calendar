@@ -9,9 +9,16 @@
 // }
 
 #include <stdio.h>
+#include "esp_timer.h"
+#include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
+
 
 #include "m274-encoder.h"
 #include "esp_log.h"
+#include "initialize.h"
+#include "eink-driver.h"
+
 
 static const char *TAG = "main";
 
@@ -32,5 +39,14 @@ void app_main(void)
     ESP_ERROR_CHECK(m274_encoder_start());
 
     ESP_LOGI(TAG, "Application started");
+	initialize();
+
+	eink_initialize();
+	eink_clear_black();
+
+   vTaskDelay(pdMS_TO_TICKS(10000));
+   eink_clear();
+   eink_sleep();
+
 }
 

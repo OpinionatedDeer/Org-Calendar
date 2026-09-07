@@ -5,4 +5,6 @@ idf_component_register(SRCS "w25q32-manager.c"
 					nvs_flash
 					esp_driver_spi
 					esp_driver_gpio
+					PRIV_REQUIRES
+					hardware_lock
 				)

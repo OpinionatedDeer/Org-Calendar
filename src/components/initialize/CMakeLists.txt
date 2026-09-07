@@ -6,4 +6,5 @@ idf_component_register(SRCS "initialize.c"
 				PRIV_REQUIRES
 					eink-driver
 					w25q32-manager
+					hardware_lock
 				)

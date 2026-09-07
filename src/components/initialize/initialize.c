@@ -6,7 +6,8 @@
 #include "esp_log.h"
 #include "eink-driver.h"
 #include "w25q32-manager.h"
-// #include "w25q32-test.c" Made for testing if spi was working or not. It was working.
+#include "hardware_lock.h"
+#include "w25q32-test.c"
 
 // static const char *TAG = "initialize";
 static spi_host_device_t spi_host = SPI2_HOST;
@@ -21,6 +22,11 @@ static bool bus_inited = false;
 esp_err_t initialize(void){
 
     esp_err_t ret;
+    ret = hardware_lock_init();
+    if (ret != ESP_OK) {
+        return ret;
+    }
+
     if (!bus_inited) {
         spi_bus_config_t buscfg = {
             .mosi_io_num = PIN_MOSI,
@@ -28,7 +34,7 @@ esp_err_t initialize(void){
             .sclk_io_num = PIN_SCLK,
             .quadwp_io_num = -1,
             .quadhd_io_num = -1,
-            .max_transfer_sz = 4096,
+            .max_transfer_sz = 0,
         };
         ret = spi_bus_initialize(spi_host, &buscfg, SPI_DMA_CH_AUTO);
         if (ret != ESP_OK && ret != ESP_ERR_INVALID_STATE) {
@@ -36,9 +42,9 @@ esp_err_t initialize(void){
             return ret;
         }
         bus_inited = true;
-		// eink_init(spi_host);
-
 		w25q32_manager_init(spi_host);
+		// w25q32_test_jedec(spi_host);
+		eink_init(spi_host);
 
     }
 	return ESP_OK;

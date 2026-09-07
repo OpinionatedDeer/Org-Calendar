@@ -16,4 +16,12 @@ config FLASH_CS
     int "CS Pin"
     default 21
 
+config FLASH_SIZE
+	int "Flash Size in MB"
+	range 1 32
+	default 4
+config FORMAT_PARTITION
+	bool "Format Partition on next boot"
+	default false
+
 endmenu

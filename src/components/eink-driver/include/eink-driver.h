@@ -16,6 +16,7 @@
 #pragma once
 #include "esp_err.h"
 #include <stdint.h>
+#include "driver/spi_master.h"
 
 #ifdef __cplusplus
 extern "C" {
