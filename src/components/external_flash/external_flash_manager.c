@@ -1,6 +1,8 @@
 #include <stdio.h>
 #include <string.h>
 #include <sys/stat.h>
+#include <sys/types.h>
+#include <dirent.h>
 #include <unistd.h>
 #include "external_flash_manager.h"
 #include "esp_flash.h"
@@ -38,7 +40,21 @@
 #define DATA_OFFSET    0x0000
 #define DATA_SIZE      EXTERNAL_FLASH_SIZE
 
+#define EXTERNAL_FLASH_BASE_PATH "/data"
+
 static const char *TAG = "external_flash_manager";
+
+static void build_full_path(char *dest, size_t dest_size, const char *rel_path) {
+    if (rel_path == NULL || rel_path[0] == '\0') {
+        snprintf(dest, dest_size, "%s", EXTERNAL_FLASH_BASE_PATH);
+    } else {
+        const char *p = rel_path;
+        if (*p == '/') {
+            p++;
+        }
+        snprintf(dest, dest_size, "%s/%s", EXTERNAL_FLASH_BASE_PATH, p);
+    }
+}
 
 esp_err_t external_flash_manager_init(spi_host_device_t spi_host_device){
 	esp_err_t ret = ESP_OK;
@@ -164,3 +180,148 @@ cleanup:
     return ret;
 }
 
+esp_err_t external_flash_file_exists(const char *path) {
+    esp_err_t ret = ESP_OK;
+    char full_path[512];
+    build_full_path(full_path, sizeof(full_path), path);
+
+    hardware_lock_acquire();
+    ESP_LOGI(TAG, "Checking if file exists: %s", full_path);
+
+    struct stat st;
+    if (stat(full_path, &st) != 0) {
+        ret = ESP_FAIL;
+        goto cleanup;
+    }
+
+cleanup:
+    hardware_lock_release();
+    return ret;
+}
+
+esp_err_t external_flash_file_remove(const char *path) {
+    esp_err_t ret = ESP_OK;
+    char full_path[512];
+    build_full_path(full_path, sizeof(full_path), path);
+
+    hardware_lock_acquire();
+    ESP_LOGI(TAG, "Removing file: %s", full_path);
+
+    if (remove(full_path) != 0) {
+        ESP_LOGE(TAG, "Failed to remove file %s", full_path);
+        ret = ESP_FAIL;
+        goto cleanup;
+    }
+
+cleanup:
+    hardware_lock_release();
+    return ret;
+}
+
+esp_err_t external_flash_file_list(const char *dir_path, void (*callback)(const char *name, bool is_dir)) {
+    esp_err_t ret = ESP_OK;
+    char full_dir_path[512];
+    build_full_path(full_dir_path, sizeof(full_dir_path), dir_path);
+
+    hardware_lock_acquire();
+    ESP_LOGI(TAG, "Listing directory: %s", full_dir_path);
+
+    DIR *dir = opendir(full_dir_path);
+    if (dir == NULL) {
+        ESP_LOGE(TAG, "Failed to open directory %s", full_dir_path);
+        ret = ESP_FAIL;
+        goto cleanup;
+    }
+
+    struct dirent *entry;
+    while ((entry = readdir(dir)) != NULL) {
+        if (strcmp(entry->d_name, ".") == 0 || strcmp(entry->d_name, "..") == 0) {
+            continue;
+        }
+
+        char full_file_path[512];
+        snprintf(full_file_path, sizeof(full_file_path), "%s/%s", full_dir_path, entry->d_name);
+
+        struct stat st;
+        bool is_dir = false;
+        if (stat(full_file_path, &st) == 0) {
+            if (S_ISDIR(st.st_mode)) {
+                is_dir = true;
+            }
+        }
+
+        if (callback) {
+            callback(entry->d_name, is_dir);
+        }
+    }
+
+    closedir(dir);
+
+cleanup:
+    hardware_lock_release();
+    return ret;
+}
+
+esp_err_t external_flash_file_get_size(const char *path, uint32_t *size) {
+    esp_err_t ret = ESP_OK;
+    char full_path[512];
+    build_full_path(full_path, sizeof(full_path), path);
+
+    hardware_lock_acquire();
+    ESP_LOGI(TAG, "Getting file size: %s", full_path);
+
+    struct stat st;
+    if (stat(full_path, &st) != 0) {
+        ESP_LOGE(TAG, "Failed to get size for file %s", full_path);
+        ret = ESP_FAIL;
+        goto cleanup;
+    }
+
+    if (size != NULL) {
+        *size = (uint32_t)st.st_size;
+    }
+
+cleanup:
+    hardware_lock_release();
+    return ret;
+}
+
+esp_err_t external_flash_file_mkdir(const char *path) {
+    esp_err_t ret = ESP_OK;
+    char full_path[512];
+    build_full_path(full_path, sizeof(full_path), path);
+
+    hardware_lock_acquire();
+    ESP_LOGI(TAG, "Creating directory: %s", full_path);
+
+    if (mkdir(full_path, 0755) != 0) {
+        ESP_LOGE(TAG, "Failed to create directory %s", full_path);
+        ret = ESP_FAIL;
+        goto cleanup;
+    }
+
+cleanup:
+    hardware_lock_release();
+    return ret;
+}
+
+esp_err_t external_flash_file_rename(const char *old_path, const char *new_path) {
+    esp_err_t ret = ESP_OK;
+    char full_old_path[512];
+    char full_new_path[512];
+    build_full_path(full_old_path, sizeof(full_old_path), old_path);
+    build_full_path(full_new_path, sizeof(full_new_path), new_path);
+
+    hardware_lock_acquire();
+    ESP_LOGI(TAG, "Renaming file from %s to %s", full_old_path, full_new_path);
+
+    if (rename(full_old_path, full_new_path) != 0) {
+        ESP_LOGE(TAG, "Failed to rename file from %s to %s", full_old_path, full_new_path);
+        ret = ESP_FAIL;
+        goto cleanup;
+    }
+
+cleanup:
+    hardware_lock_release();
+    return ret;
+}
