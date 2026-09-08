@@ -5,6 +5,6 @@ idf_component_register(SRCS "initialize.c"
 					esp_driver_gpio
 				PRIV_REQUIRES
 					eink-driver
-					w25q32-manager
+					external_flash
 					hardware_lock
 				)

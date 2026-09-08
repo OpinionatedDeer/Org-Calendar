@@ -5,9 +5,9 @@
 #include "sdkconfig.h"
 #include "esp_log.h"
 #include "eink-driver.h"
-#include "w25q32-manager.h"
+#include "external_flash_manager.h"
 #include "hardware_lock.h"
-#include "w25q32-test.c"
+#include "external_flash_test.c"
 
 // static const char *TAG = "initialize";
 static spi_host_device_t spi_host = SPI2_HOST;
@@ -42,8 +42,8 @@ esp_err_t initialize(void){
             return ret;
         }
         bus_inited = true;
-		w25q32_manager_init(spi_host);
-		// w25q32_test_jedec(spi_host);
+		external_flash_manager_init(spi_host);
+		// external_flash_test_jedec(spi_host);
 		eink_init(spi_host);
 
     }

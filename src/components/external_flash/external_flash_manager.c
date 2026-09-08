@@ -2,7 +2,7 @@
 #include <string.h>
 #include <sys/stat.h>
 #include <unistd.h>
-#include "w25q32-manager.h"
+#include "external_flash_manager.h"
 #include "esp_flash.h"
 #include "esp_log.h"
 #include "esp_err.h"
@@ -20,27 +20,31 @@
 
 
 #define	SPI_FREQUENCY CONFIG_FLASH_SPI_FREQUENCY
-#define PIN_CS CONFIG_FLASH_CS
-#define FORMAT_PARTITION CONFIG_FORMAT_PARTITION
 
-#if CONFIG_DEBUG_MODE
-#define DEBUG_LOGI(...) ESP_LOGI(TAG, __VA_ARGS__)
-#else
-#define DEBUG_LOGI(...) do { } while (0)
+#define PIN_CS CONFIG_FLASH_CS
+
+#ifndef CONFIG_FORMAT_PARTITION
+#define CONFIG_FORMAT_PARTITION false
 #endif
 
-#define W25Q32_SIZE    (CONFIG_FLASH_SIZE * 1024 * 1024)
+
+#ifndef CONFIG_DEBUG_MODE
+#define CONFIG_DEBUG_MODE false
+#endif
+
+
+#define EXTERNAL_FLASH_SIZE    (CONFIG_FLASH_SIZE * 1024 * 1024)
 
 #define DATA_OFFSET    0x0000
-#define DATA_SIZE      W25Q32_SIZE
+#define DATA_SIZE      EXTERNAL_FLASH_SIZE
 
-static const char *TAG = "w25q32-manager";
+static const char *TAG = "external_flash_manager";
 
-esp_err_t w25q32_manager_init(spi_host_device_t spi_host_device){
+esp_err_t external_flash_manager_init(spi_host_device_t spi_host_device){
 	esp_err_t ret = ESP_OK;
 	hardware_lock_acquire();
 
-	ESP_LOGI(TAG, "initialize W25q32");
+	ESP_LOGI(TAG, "initialize EXTERNAL_FLASH");
 
     esp_flash_t *chip = NULL;
 
@@ -57,7 +61,7 @@ esp_err_t w25q32_manager_init(spi_host_device_t spi_host_device){
 	ESP_LOGI(TAG, "Before spi_bus_add_flash_device");
     ret = spi_bus_add_flash_device(&chip, &config);
     if (ret != ESP_OK) {
-        ESP_LOGE(TAG, "Failed to add W25Q32: %s",
+        ESP_LOGE(TAG, "Failed to add EXTERNAL_FLASH: %s",
                  esp_err_to_name(ret));
         goto cleanup;
     }
@@ -72,7 +76,7 @@ esp_err_t w25q32_manager_init(spi_host_device_t spi_host_device){
 	ESP_LOGI(TAG, "Before esp_flash_init");
     ret = esp_flash_init(chip);
     if (ret != ESP_OK) {
-        ESP_LOGE(TAG, "Failed to initialize W25Q32: %s",
+        ESP_LOGE(TAG, "Failed to initialize EXTERNAL_FLASH: %s",
                  esp_err_to_name(ret));
         goto cleanup;
     }
@@ -88,7 +92,7 @@ esp_err_t w25q32_manager_init(spi_host_device_t spi_host_device){
                  esp_err_to_name(ret));
         goto cleanup;
     }
-    ESP_LOGI(TAG, "W25Q32 flash size: %lu bytes",
+    ESP_LOGI(TAG, "EXTERNAL_FLASH flash size: %lu bytes",
              (unsigned long)flash_size);
     ret = esp_flash_get_physical_size(chip, &flash_size);
     if (ret != ESP_OK) {
@@ -98,7 +102,7 @@ esp_err_t w25q32_manager_init(spi_host_device_t spi_host_device){
     }
 
 
-    ESP_LOGI(TAG, "W25Q32 physical flash size: %lu bytes",
+    ESP_LOGI(TAG, "EXTERNAL_FLASH physical flash size: %lu bytes",
              (unsigned long)flash_size);
 
 	const esp_partition_t * littlefs_partition = NULL;
@@ -122,7 +126,7 @@ esp_err_t w25q32_manager_init(spi_host_device_t spi_host_device){
     }
 	ESP_LOGI(TAG, "Partition Registered");
 
-	if (FORMAT_PARTITION) {
+	if (CONFIG_FORMAT_PARTITION) {
 		ESP_LOGI(TAG, "Formatting littlefs partition");
 
 		ret = esp_littlefs_format_partition(littlefs_partition);

@@ -5,16 +5,16 @@
 #include "freertos/task.h"
 
 #define PIN_CS 21
-static const char *TAG = "W25Q32_TEST";
-esp_err_t w25q32_test_rw(spi_host_device_t host);
+static const char *TAG = "EXTERNAL_FLASH_TEST";
+esp_err_t external_flash_test_rw(spi_host_device_t host);
 
-esp_err_t w25q32_test_jedec(spi_host_device_t host)
+esp_err_t external_flash_test_jedec(spi_host_device_t host)
 {
     esp_err_t ret;
 
     spi_device_handle_t dev = NULL;
 
-    // Configure W25Q32 as a normal SPI device.
+    // Configure EXTERNAL_FLASH as a normal SPI device.
     spi_device_interface_config_t devcfg = {
         .clock_speed_hz = 1000000,   // 1 MHz
         .mode = 0,                   // SPI mode 0
@@ -70,12 +70,12 @@ ESP_LOGI("TAG", "Sending JEDEC ID command 0x9F");
              rx[1], rx[2], rx[3]);
 
     spi_bus_remove_device(dev);
-	ret = w25q32_test_rw(host);
+	ret = external_flash_test_rw(host);
 
 if (ret != ESP_OK) {
-    ESP_LOGE("TAG", "W25Q32 R/W test FAILED");
+    ESP_LOGE("TAG", "EXTERNAL_FLASH R/W test FAILED");
 } else {
-    ESP_LOGI("TAG", "W25Q32 R/W test PASSED");
+    ESP_LOGI("TAG", "EXTERNAL_FLASH R/W test PASSED");
 }
 
 
@@ -84,20 +84,20 @@ if (ret != ESP_OK) {
 
 
 // ============================================================
-// W25Q32 STATUS + WRITE/READ TEST
+// EXTERNAL_FLASH STATUS + WRITE/READ TEST
 // ============================================================
 
-#define W25Q32_CMD_WRITE_ENABLE   0x06
-#define W25Q32_CMD_READ_STATUS1   0x05
-#define W25Q32_CMD_SECTOR_ERASE   0x20
-#define W25Q32_CMD_PAGE_PROGRAM   0x02
-#define W25Q32_CMD_READ_DATA      0x03
+#define EXTERNAL_FLASH_CMD_WRITE_ENABLE   0x06
+#define EXTERNAL_FLASH_CMD_READ_STATUS1   0x05
+#define EXTERNAL_FLASH_CMD_SECTOR_ERASE   0x20
+#define EXTERNAL_FLASH_CMD_PAGE_PROGRAM   0x02
+#define EXTERNAL_FLASH_CMD_READ_DATA      0x03
 
-static esp_err_t w25q32_read_status1(spi_device_handle_t dev,
+static esp_err_t external_flash_read_status1(spi_device_handle_t dev,
                                      uint8_t *status)
 {
     uint8_t tx[2] = {
-        W25Q32_CMD_READ_STATUS1,
+        EXTERNAL_FLASH_CMD_READ_STATUS1,
         0x00
     };
 
@@ -121,9 +121,9 @@ static esp_err_t w25q32_read_status1(spi_device_handle_t dev,
 }
 
 
-static esp_err_t w25q32_write_enable(spi_device_handle_t dev)
+static esp_err_t external_flash_write_enable(spi_device_handle_t dev)
 {
-    uint8_t cmd = W25Q32_CMD_WRITE_ENABLE;
+    uint8_t cmd = EXTERNAL_FLASH_CMD_WRITE_ENABLE;
 
     spi_transaction_t t = {
         .length = 8,
@@ -134,12 +134,12 @@ static esp_err_t w25q32_write_enable(spi_device_handle_t dev)
 }
 
 
-static esp_err_t w25q32_wait_busy(spi_device_handle_t dev)
+static esp_err_t external_flash_wait_busy(spi_device_handle_t dev)
 {
     uint8_t status;
 
     while (1) {
-        esp_err_t ret = w25q32_read_status1(dev, &status);
+        esp_err_t ret = external_flash_read_status1(dev, &status);
 
         if (ret != ESP_OK) {
             return ret;
@@ -154,11 +154,11 @@ static esp_err_t w25q32_wait_busy(spi_device_handle_t dev)
 }
 
 
-static esp_err_t w25q32_sector_erase(spi_device_handle_t dev,
+static esp_err_t external_flash_sector_erase(spi_device_handle_t dev,
                                      uint32_t addr)
 {
     uint8_t tx[4] = {
-        W25Q32_CMD_SECTOR_ERASE,
+        EXTERNAL_FLASH_CMD_SECTOR_ERASE,
         (addr >> 16) & 0xFF,
         (addr >> 8) & 0xFF,
         addr & 0xFF
@@ -173,7 +173,7 @@ static esp_err_t w25q32_sector_erase(spi_device_handle_t dev,
 }
 
 
-static esp_err_t w25q32_page_program(spi_device_handle_t dev,
+static esp_err_t external_flash_page_program(spi_device_handle_t dev,
                                      uint32_t addr,
                                      const uint8_t *data,
                                      size_t len)
@@ -184,7 +184,7 @@ static esp_err_t w25q32_page_program(spi_device_handle_t dev,
 
     uint8_t tx[4 + 256];
 
-    tx[0] = W25Q32_CMD_PAGE_PROGRAM;
+    tx[0] = EXTERNAL_FLASH_CMD_PAGE_PROGRAM;
     tx[1] = (addr >> 16) & 0xFF;
     tx[2] = (addr >> 8) & 0xFF;
     tx[3] = addr & 0xFF;
@@ -200,14 +200,14 @@ static esp_err_t w25q32_page_program(spi_device_handle_t dev,
 }
 
 
-static esp_err_t w25q32_read_data(spi_device_handle_t dev,
+static esp_err_t external_flash_read_data(spi_device_handle_t dev,
                                   uint32_t addr,
                                   uint8_t *data,
                                   size_t len)
 {
     uint8_t buffer[4 + 256] = {0};
 
-    buffer[0] = W25Q32_CMD_READ_DATA;
+    buffer[0] = EXTERNAL_FLASH_CMD_READ_DATA;
     buffer[1] = (addr >> 16) & 0xFF;
     buffer[2] = (addr >> 8) & 0xFF;
     buffer[3] = addr & 0xFF;
@@ -232,10 +232,10 @@ static esp_err_t w25q32_read_data(spi_device_handle_t dev,
 
 
 // ============================================================
-// RUN W25Q32 TEST
+// RUN EXTERNAL_FLASH TEST
 // ============================================================
 
-esp_err_t w25q32_test_rw(spi_host_device_t host)
+esp_err_t external_flash_test_rw(spi_host_device_t host)
 {
     esp_err_t ret;
     spi_device_handle_t dev = NULL;
@@ -263,7 +263,7 @@ esp_err_t w25q32_test_rw(spi_host_device_t host)
 
     ESP_LOGI("TAG", "Reading Status Register-1...");
 
-    ret = w25q32_read_status1(dev, &status);
+    ret = external_flash_read_status1(dev, &status);
 
     if (ret != ESP_OK) {
         ESP_LOGE("TAG", "Read status failed: %s",
@@ -292,7 +292,7 @@ esp_err_t w25q32_test_rw(spi_host_device_t host)
 
     ESP_LOGI("TAG", "Sending Write Enable...");
 
-    ret = w25q32_write_enable(dev);
+    ret = external_flash_write_enable(dev);
 
     if (ret != ESP_OK) {
         ESP_LOGE("TAG", "Write Enable failed: %s",
@@ -300,7 +300,7 @@ esp_err_t w25q32_test_rw(spi_host_device_t host)
         goto cleanup;
     }
 
-    ret = w25q32_read_status1(dev, &status);
+    ret = external_flash_read_status1(dev, &status);
 
     if (ret != ESP_OK) {
         goto cleanup;
@@ -326,7 +326,7 @@ esp_err_t w25q32_test_rw(spi_host_device_t host)
              "Erasing sector at address 0x%06lX...",
              (unsigned long)test_addr);
 
-    ret = w25q32_sector_erase(dev, test_addr);
+    ret = external_flash_sector_erase(dev, test_addr);
 
     if (ret != ESP_OK) {
         ESP_LOGE("TAG", "Sector erase failed: %s",
@@ -334,7 +334,7 @@ esp_err_t w25q32_test_rw(spi_host_device_t host)
         goto cleanup;
     }
 
-    ret = w25q32_wait_busy(dev);
+    ret = external_flash_wait_busy(dev);
 
     if (ret != ESP_OK) {
         ESP_LOGE("TAG", "Erase wait failed: %s",
@@ -358,14 +358,14 @@ esp_err_t w25q32_test_rw(spi_host_device_t host)
 
     ESP_LOGI("TAG", "Writing: DE AD BE EF");
 
-    ret = w25q32_write_enable(dev);
+    ret = external_flash_write_enable(dev);
 
     if (ret != ESP_OK) {
         ESP_LOGE("TAG", "Write Enable failed");
         goto cleanup;
     }
 
-    ret = w25q32_page_program(dev,
+    ret = external_flash_page_program(dev,
                                test_addr,
                                write_data,
                                sizeof(write_data));
@@ -376,7 +376,7 @@ esp_err_t w25q32_test_rw(spi_host_device_t host)
         goto cleanup;
     }
 
-    ret = w25q32_wait_busy(dev);
+    ret = external_flash_wait_busy(dev);
 
     if (ret != ESP_OK) {
         ESP_LOGE("TAG", "Program wait failed: %s",
@@ -395,7 +395,7 @@ esp_err_t w25q32_test_rw(spi_host_device_t host)
 
     ESP_LOGI("TAG", "Reading back...");
 
-    ret = w25q32_read_data(dev,
+    ret = external_flash_read_data(dev,
                            test_addr,
                            read_data,
                            sizeof(read_data));
@@ -423,7 +423,7 @@ esp_err_t w25q32_test_rw(spi_host_device_t host)
                sizeof(write_data)) == 0) {
 
         ESP_LOGI("TAG", "================================");
-        ESP_LOGI("TAG", "W25Q32 WRITE/READ TEST: PASS");
+        ESP_LOGI("TAG", "EXTERNAL_FLASH WRITE/READ TEST: PASS");
         ESP_LOGI("TAG", "================================");
 
         ret = ESP_OK;
@@ -431,7 +431,7 @@ esp_err_t w25q32_test_rw(spi_host_device_t host)
     } else {
 
         ESP_LOGE("TAG", "================================");
-        ESP_LOGE("TAG", "W25Q32 WRITE/READ TEST: FAIL");
+        ESP_LOGE("TAG", "EXTERNAL_FLASH WRITE/READ TEST: FAIL");
         ESP_LOGE("TAG", "================================");
 
         ret = ESP_FAIL;

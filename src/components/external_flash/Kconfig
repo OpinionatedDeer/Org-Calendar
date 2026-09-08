@@ -8,7 +8,7 @@ config DEBUG_MODE
 config FLASH_SPI_FREQUENCY
     int "SPI Frequency in MHZ"
     range 1 80
-    default 40
+    default 2
     help
         Choose a value between 1-80
 

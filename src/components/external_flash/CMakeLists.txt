@@ -1,4 +1,4 @@
-idf_component_register(SRCS "w25q32-manager.c"
+idf_component_register(SRCS "external_flash_manager.c"
                     INCLUDE_DIRS "include"
 					REQUIRES
 					spi_flash
