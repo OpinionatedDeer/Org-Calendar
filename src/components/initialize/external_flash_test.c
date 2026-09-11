@@ -22,11 +22,11 @@ esp_err_t external_flash_test_jedec(spi_host_device_t host)
         .queue_size = 1,
     };
 
-ESP_LOGI("TAG", "Sending JEDEC ID command 0x9F");
+ESP_LOGI(TAG, "Sending JEDEC ID command 0x9F");
 
     ret = spi_bus_add_device(host, &devcfg, &dev);
     if (ret != ESP_OK) {
-        ESP_LOGE("TAG", "spi_bus_add_device failed: %s",
+        ESP_LOGE(TAG, "spi_bus_add_device failed: %s",
                  esp_err_to_name(ret));
         return ret;
     }
@@ -56,26 +56,26 @@ ESP_LOGI("TAG", "Sending JEDEC ID command 0x9F");
     ret = spi_device_transmit(dev, &transaction);
 
     if (ret != ESP_OK) {
-        ESP_LOGE("TAG", "spi_device_transmit failed: %s",
+        ESP_LOGE(TAG, "spi_device_transmit failed: %s",
                  esp_err_to_name(ret));
 
         spi_bus_remove_device(dev);
         return ret;
     }
 
-    ESP_LOGI("TAG", "RX: %02X %02X %02X %02X",
+    ESP_LOGI(TAG, "RX: %02X %02X %02X %02X",
              rx[0], rx[1], rx[2], rx[3]);
 
-    ESP_LOGI("TAG", "JEDEC ID: %02X %02X %02X",
+    ESP_LOGI(TAG, "JEDEC ID: %02X %02X %02X",
              rx[1], rx[2], rx[3]);
 
     spi_bus_remove_device(dev);
 	ret = external_flash_test_rw(host);
 
 if (ret != ESP_OK) {
-    ESP_LOGE("TAG", "EXTERNAL_FLASH R/W test FAILED");
+    ESP_LOGE(TAG, "EXTERNAL_FLASH R/W test FAILED");
 } else {
-    ESP_LOGI("TAG", "EXTERNAL_FLASH R/W test PASSED");
+    ESP_LOGI(TAG, "EXTERNAL_FLASH R/W test PASSED");
 }
 
 
@@ -250,7 +250,7 @@ esp_err_t external_flash_test_rw(spi_host_device_t host)
     ret = spi_bus_add_device(host, &devcfg, &dev);
 
     if (ret != ESP_OK) {
-        ESP_LOGE("TAG", "spi_bus_add_device failed: %s",
+        ESP_LOGE(TAG, "spi_bus_add_device failed: %s",
                  esp_err_to_name(ret));
         return ret;
     }
@@ -261,17 +261,17 @@ esp_err_t external_flash_test_rw(spi_host_device_t host)
 
     uint8_t status = 0;
 
-    ESP_LOGI("TAG", "Reading Status Register-1...");
+    ESP_LOGI(TAG, "Reading Status Register-1...");
 
     ret = external_flash_read_status1(dev, &status);
 
     if (ret != ESP_OK) {
-        ESP_LOGE("TAG", "Read status failed: %s",
+        ESP_LOGE(TAG, "Read status failed: %s",
                  esp_err_to_name(ret));
         goto cleanup;
     }
 
-    ESP_LOGI("TAG",
+    ESP_LOGI(TAG,
              "Status = 0x%02X  BUSY=%d  WEL=%d",
              status,
              status & 0x01,
@@ -290,12 +290,12 @@ esp_err_t external_flash_test_rw(spi_host_device_t host)
     // 2. WRITE ENABLE
     // --------------------------------------------------------
 
-    ESP_LOGI("TAG", "Sending Write Enable...");
+    ESP_LOGI(TAG, "Sending Write Enable...");
 
     ret = external_flash_write_enable(dev);
 
     if (ret != ESP_OK) {
-        ESP_LOGE("TAG", "Write Enable failed: %s",
+        ESP_LOGE(TAG, "Write Enable failed: %s",
                  esp_err_to_name(ret));
         goto cleanup;
     }
@@ -306,13 +306,13 @@ esp_err_t external_flash_test_rw(spi_host_device_t host)
         goto cleanup;
     }
 
-    ESP_LOGI("TAG",
+    ESP_LOGI(TAG,
              "After WREN: Status=0x%02X WEL=%d",
              status,
              (status >> 1) & 0x01);
 
     if (!(status & 0x02)) {
-        ESP_LOGE("TAG", "WEL bit was NOT set!");
+        ESP_LOGE(TAG, "WEL bit was NOT set!");
         ret = ESP_FAIL;
         goto cleanup;
     }
@@ -322,14 +322,14 @@ esp_err_t external_flash_test_rw(spi_host_device_t host)
     // 3. ERASE 4KB SECTOR
     // --------------------------------------------------------
 
-    ESP_LOGI("TAG",
+    ESP_LOGI(TAG,
              "Erasing sector at address 0x%06lX...",
              (unsigned long)test_addr);
 
     ret = external_flash_sector_erase(dev, test_addr);
 
     if (ret != ESP_OK) {
-        ESP_LOGE("TAG", "Sector erase failed: %s",
+        ESP_LOGE(TAG, "Sector erase failed: %s",
                  esp_err_to_name(ret));
         goto cleanup;
     }
@@ -337,12 +337,12 @@ esp_err_t external_flash_test_rw(spi_host_device_t host)
     ret = external_flash_wait_busy(dev);
 
     if (ret != ESP_OK) {
-        ESP_LOGE("TAG", "Erase wait failed: %s",
+        ESP_LOGE(TAG, "Erase wait failed: %s",
                  esp_err_to_name(ret));
         goto cleanup;
     }
 
-    ESP_LOGI("TAG", "Sector erase complete");
+    ESP_LOGI(TAG, "Sector erase complete");
 
 
     // --------------------------------------------------------
@@ -356,12 +356,12 @@ esp_err_t external_flash_test_rw(spi_host_device_t host)
         0xEF
     };
 
-    ESP_LOGI("TAG", "Writing: DE AD BE EF");
+    ESP_LOGI(TAG, "Writing: DE AD BE EF");
 
     ret = external_flash_write_enable(dev);
 
     if (ret != ESP_OK) {
-        ESP_LOGE("TAG", "Write Enable failed");
+        ESP_LOGE(TAG, "Write Enable failed");
         goto cleanup;
     }
 
@@ -371,7 +371,7 @@ esp_err_t external_flash_test_rw(spi_host_device_t host)
                                sizeof(write_data));
 
     if (ret != ESP_OK) {
-        ESP_LOGE("TAG", "Page program failed: %s",
+        ESP_LOGE(TAG, "Page program failed: %s",
                  esp_err_to_name(ret));
         goto cleanup;
     }
@@ -379,12 +379,12 @@ esp_err_t external_flash_test_rw(spi_host_device_t host)
     ret = external_flash_wait_busy(dev);
 
     if (ret != ESP_OK) {
-        ESP_LOGE("TAG", "Program wait failed: %s",
+        ESP_LOGE(TAG, "Program wait failed: %s",
                  esp_err_to_name(ret));
         goto cleanup;
     }
 
-    ESP_LOGI("TAG", "Write complete");
+    ESP_LOGI(TAG, "Write complete");
 
 
     // --------------------------------------------------------
@@ -393,7 +393,7 @@ esp_err_t external_flash_test_rw(spi_host_device_t host)
 
     uint8_t read_data[4] = {0};
 
-    ESP_LOGI("TAG", "Reading back...");
+    ESP_LOGI(TAG, "Reading back...");
 
     ret = external_flash_read_data(dev,
                            test_addr,
@@ -401,12 +401,12 @@ esp_err_t external_flash_test_rw(spi_host_device_t host)
                            sizeof(read_data));
 
     if (ret != ESP_OK) {
-        ESP_LOGE("TAG", "Read failed: %s",
+        ESP_LOGE(TAG, "Read failed: %s",
                  esp_err_to_name(ret));
         goto cleanup;
     }
 
-    ESP_LOGI("TAG",
+    ESP_LOGI(TAG,
              "Read back: %02X %02X %02X %02X",
              read_data[0],
              read_data[1],
@@ -422,17 +422,17 @@ esp_err_t external_flash_test_rw(spi_host_device_t host)
                read_data,
                sizeof(write_data)) == 0) {
 
-        ESP_LOGI("TAG", "================================");
-        ESP_LOGI("TAG", "EXTERNAL_FLASH WRITE/READ TEST: PASS");
-        ESP_LOGI("TAG", "================================");
+        ESP_LOGI(TAG, "================================");
+        ESP_LOGI(TAG, "EXTERNAL_FLASH WRITE/READ TEST: PASS");
+        ESP_LOGI(TAG, "================================");
 
         ret = ESP_OK;
 
     } else {
 
-        ESP_LOGE("TAG", "================================");
-        ESP_LOGE("TAG", "EXTERNAL_FLASH WRITE/READ TEST: FAIL");
-        ESP_LOGE("TAG", "================================");
+        ESP_LOGE(TAG, "================================");
+        ESP_LOGE(TAG, "EXTERNAL_FLASH WRITE/READ TEST: FAIL");
+        ESP_LOGE(TAG, "================================");
 
         ret = ESP_FAIL;
     }

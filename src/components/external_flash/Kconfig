@@ -3,7 +3,7 @@ menu "FLASH Configuration"
 
 config DEBUG_MODE
 	bool "Turn on and off the LOGI"
-	default false
+	default n
 
 config FLASH_SPI_FREQUENCY
     int "SPI Frequency in MHZ"
@@ -22,6 +22,6 @@ config FLASH_SIZE
 	default 4
 config FORMAT_PARTITION
 	bool "Format Partition on next boot"
-	default false
+	default n
 
 endmenu

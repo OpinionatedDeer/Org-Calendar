@@ -1,2 +1,5 @@
 idf_component_register(SRCS "hardware_lock.c"
-                    INCLUDE_DIRS "include")
+                    INCLUDE_DIRS "include"
+				REQUIRES
+					esp_driver_gpio
+			)

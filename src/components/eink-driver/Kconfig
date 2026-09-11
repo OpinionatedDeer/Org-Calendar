@@ -2,7 +2,7 @@ menu "E-Ink Display Configuration"
 
 config DEBUG_MODE
 	bool "Turn on and off the LOGI"
-	default false
+	default n
 
 config EINK_SPI_FREQUENCY
     int "SPI Frequency in MHZ"

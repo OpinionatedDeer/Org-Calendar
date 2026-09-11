@@ -167,7 +167,7 @@ static esp_err_t eink_write_data_single(const uint8_t data){
 esp_err_t eink_init(spi_host_device_t SPI_HOST_DEVICE) {
     esp_err_t ret = ESP_OK;
 	ESP_LOGI(TAG, "Initialize start");
-    hardware_lock_acquire();
+    hardware_lock_acquire(HW_STATE_EINK);
 
     /* --- Configure control pins --- */
     gpio_config_t out_cfg = {
@@ -291,7 +291,7 @@ cleanup:
 
 esp_err_t eink_initialize(void){
     esp_err_t ret = ESP_OK;
-    hardware_lock_acquire();
+    hardware_lock_acquire(HW_STATE_EINK);
     eink_reset();
     EINK_CHECK(eink_wait_busy());
     EINK_CHECK(eink_write_cmd(0x12)); // SWRESET
@@ -335,7 +335,7 @@ cleanup:
 
 esp_err_t eink_initialize_fast(void){
     esp_err_t ret = ESP_OK;
-    hardware_lock_acquire();
+    hardware_lock_acquire(HW_STATE_EINK);
     eink_reset();
     EINK_CHECK(eink_wait_busy());
     EINK_CHECK(eink_write_cmd(0x12)); // SWRESET
@@ -386,7 +386,7 @@ cleanup:
 
 esp_err_t eink_initialize_gray(void){
     esp_err_t ret = ESP_OK;
-    hardware_lock_acquire();
+    hardware_lock_acquire(HW_STATE_EINK);
     eink_reset();
     EINK_CHECK(eink_wait_busy());
     EINK_CHECK(eink_write_cmd(0x12)); // SWRESET
@@ -515,7 +515,7 @@ cleanup:
 esp_err_t eink_clear(void){
     esp_err_t ret = ESP_OK;
     uint16_t w = eink_width_bytes();
-    hardware_lock_acquire();
+    hardware_lock_acquire(HW_STATE_EINK);
     EINK_CHECK(eink_reset_window());
     EINK_CHECK(eink_send_clear_row(0x24, w, DISPLAY_HEIGHT, 0xFF));
     EINK_CHECK(eink_send_clear_row(0x26, w, DISPLAY_HEIGHT, 0xFF));
@@ -529,7 +529,7 @@ cleanup:
 esp_err_t eink_clear_black(void){
     esp_err_t ret = ESP_OK;
     uint16_t w = eink_width_bytes();
-    hardware_lock_acquire();
+    hardware_lock_acquire(HW_STATE_EINK);
     EINK_CHECK(eink_reset_window());
     EINK_CHECK(eink_send_clear_row(0x24, w, DISPLAY_HEIGHT, 0x00));
     EINK_CHECK(eink_send_clear_row(0x26, w, DISPLAY_HEIGHT, 0x00));
@@ -580,7 +580,7 @@ cleanup:
 esp_err_t eink_display(const uint8_t *image) {
     esp_err_t ret = ESP_OK;
     uint16_t w = eink_width_bytes();
-    hardware_lock_acquire();
+    hardware_lock_acquire(HW_STATE_EINK);
     EINK_CHECK(eink_reset_window());
     EINK_CHECK(eink_send_image(0x24, image, w, DISPLAY_HEIGHT));
     EINK_CHECK(eink_turn_on_display(0xF7));
@@ -593,7 +593,7 @@ cleanup:
 esp_err_t eink_display_base(const uint8_t *image) {
     esp_err_t ret = ESP_OK;
     uint16_t w = eink_width_bytes();
-    hardware_lock_acquire();
+    hardware_lock_acquire(HW_STATE_EINK);
     EINK_CHECK(eink_reset_window());
     EINK_CHECK(eink_send_image(0x24, image, w, DISPLAY_HEIGHT));
     EINK_CHECK(eink_send_image(0x26, image, w, DISPLAY_HEIGHT));
@@ -607,7 +607,7 @@ cleanup:
 esp_err_t eink_display_fast(const uint8_t *image) {
     esp_err_t ret = ESP_OK;
     uint16_t w = eink_width_bytes();
-    hardware_lock_acquire();
+    hardware_lock_acquire(HW_STATE_EINK);
     EINK_CHECK(eink_reset_window());
     EINK_CHECK(eink_send_image(0x24, image, w, DISPLAY_HEIGHT));
     EINK_CHECK(eink_turn_on_display(0xD7));
@@ -620,7 +620,7 @@ cleanup:
 esp_err_t eink_display_fast_base(const uint8_t *image) {
     esp_err_t ret = ESP_OK;
     uint16_t w = eink_width_bytes();
-    hardware_lock_acquire();
+    hardware_lock_acquire(HW_STATE_EINK);
     EINK_CHECK(eink_reset_window());
     EINK_CHECK(eink_send_image(0x24, image, w, DISPLAY_HEIGHT));
     EINK_CHECK(eink_send_image(0x26, image, w, DISPLAY_HEIGHT));
@@ -643,7 +643,7 @@ esp_err_t eink_display_window(const uint8_t *image, uint16_t xstart, uint16_t ys
     esp_err_t ret = ESP_OK;
     uint16_t w = eink_width_bytes();
     uint8_t row[w];
-    hardware_lock_acquire();
+    hardware_lock_acquire(HW_STATE_EINK);
     EINK_CHECK(eink_write_cmd(0x24));
     for (uint16_t i = 0; i < DISPLAY_HEIGHT; i++) {
         for (uint16_t j = 0; j < w; j++) {
@@ -666,7 +666,7 @@ esp_err_t eink_display_window_base(const uint8_t *image, uint16_t xstart, uint16
     esp_err_t ret = ESP_OK;
     uint16_t w = eink_width_bytes();
     uint8_t row[w];
-    hardware_lock_acquire();
+    hardware_lock_acquire(HW_STATE_EINK);
     for (int pass = 0; pass < 2; pass++) {
         EINK_CHECK(eink_write_cmd(pass == 0 ? 0x24 : 0x26));
         for (uint16_t i = 0; i < DISPLAY_HEIGHT; i++) {
@@ -733,7 +733,7 @@ esp_err_t eink_display_partial(const uint8_t *image, uint16_t Xstart, uint16_t Y
     Xend -= 1;
     Yend -= 1;
 
-    hardware_lock_acquire();
+    hardware_lock_acquire(HW_STATE_EINK);
     eink_reset();
 
     EINK_CHECK(eink_write_cmd(0x18));
@@ -846,7 +846,7 @@ esp_err_t eink_display_4gray(const uint8_t *image) {
     esp_err_t ret = ESP_OK;
     uint16_t w = eink_width_bytes();
     uint8_t row[w];
-    hardware_lock_acquire();
+    hardware_lock_acquire(HW_STATE_EINK);
     EINK_CHECK(eink_reset_window());
     for (int pass = 0; pass < 2; pass++) {
         EINK_CHECK(eink_write_cmd(pass == 0 ? 0x24 : 0x26));
@@ -869,7 +869,7 @@ cleanup:
 
 esp_err_t eink_sleep(void) {
     esp_err_t ret = ESP_OK;
-    hardware_lock_acquire();
+    hardware_lock_acquire(HW_STATE_EINK);
     EINK_CHECK(eink_write_cmd(0x10));
     EINK_CHECK(eink_write_data_single(0x01));
     vTaskDelay(pdMS_TO_TICKS(2100));
