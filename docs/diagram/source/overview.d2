@@ -1,0 +1,29 @@
+explanation: |md
+  # Current High Level flow diagram
+|
+explanation.shape: rectangle
+
+initialize-component -> eink-driver-component
+initialize-component -> external_flash-component
+
+Main -> initialize-component : Initialize the combined spi bus.
+Main <-> external_flash-component
+Main -> eink-driver-component
+Main <-> m274-encoder-component
+
+m274-encoder-component <- m274-encoder
+
+eink-driver-component -> hardware_lock
+eink-driver-component <-> "Waveshare3.97 Display"
+
+external_flash-component -> hardware_lock
+external_flash-component <-> "w25q32 Flash Chip"
+
+hardware_lock: {
+  tooltip: "Switches shared PIN between MISO and DC depending on whether the external flash or e-ink driver is accessing the shared SPI bus."
+}
+
+hardware_lock -> "w25q32 Flash Chip"
+hardware_lock -> "Waveshare3.97 Display"
+
+
