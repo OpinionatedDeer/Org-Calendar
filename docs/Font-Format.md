@@ -35,11 +35,11 @@ fonts/
 ├── regular16/
 │   ├── info
 │   ├── undefined.bmp
-│   ├── F200/
+│   ├── 00F200/
 │   │   ├── index
-│   │   ├── F200.bmp
-│   │   ├── F220.bmp
-│   │   └── F240.bmp
+│   │   ├── 00F200.bmp
+│   │   ├── 00F220.bmp
+│   │   └── 00F240.bmp
 │   └── ...
 │
 ├── bold16/
@@ -69,9 +69,12 @@ bold16
 bold24
 italic16
 bolditalic16
+regular16inv
 
 
 The actual raster dimensions and baseline are obtained from info; the nominal size in the directory name is primarily an identifier.
+
+An optional inv suffix marks a visually inverted variant (white glyphs on a black cell), for example regular16inv. It uses exactly the same format; only the rendered glyphs differ, so the renderer handles it like any other font.
 
 4. Font Metadata
 
@@ -140,6 +143,8 @@ Baseline
 
 Baseline position for the font in the fixed glyph cell.
 
+The baseline is the row offset from the top of the glyph cell. Rows 0 to baseline − 1 hold the part of a glyph above the baseline; descenders occupy rows baseline and below. Valid values are 0 to height.
+
 This is stored because different font sizes and visual styles may have different rasterization/baseline requirements.
 
 5. Glyph Cells
@@ -201,9 +206,23 @@ row 15 → bytes 30–31
 
 The exact bit ordering within each byte is identical to the e-ink framebuffer's bit ordering.
 
+For the SSD1680 framebuffer used by eink-driver this means:
+
+The most significant bit of each byte is the leftmost pixel.
+A 1 bit is white (paper); a 0 bit is black (ink).
+Each row starts on a byte boundary. When width is not a multiple of 8, the padding bits at the end of each row hold the background colour.
+
+An inverted variant (see Directory Structure) stores white glyphs on a black background in the same representation.
+
 This allows the glyph data to be used without converting between incompatible pixel formats.
 
 7. Unicode Organization
+
+Unicode code points are represented internally as unsigned 32-bit
+values.
+
+Valid Unicode scalar values are U+000000 through U+10FFFF, excluding
+the surrogate range U+D800–U+DFFF. Surrogates are never stored.
 
 Unicode data is divided into two levels.
 
@@ -211,28 +230,29 @@ Unicode data is divided into two levels.
 
 Each range directory represents 256 consecutive Unicode codepoints.
 
-For example:
+For a codepoint:
 
-F200/
+    range = codepoint & ~0xFFu;
 
-
-represents:
-
-U+F200 – U+F2FF
-
-
-The range is determined from the codepoint by:
-
-range = codepoint & 0xFF00;
-
-
-The directory name uses uppercase hexadecimal.
+The range directory name is the range value represented as six
+uppercase hexadecimal digits.
 
 Examples:
 
-F200/
-E000/
-2000/
+    U+0041   → 000000/
+    U+20AC   → 002000/
+    U+F247   → 00F200/
+    U+1F600  → 01F600/
+    U+10FFFD → 10FF00/
+
+Each range represents:
+
+    range ... range + 0xFF
+
+For example, 00F200/ represents U+F200 – U+F2FF.
+
+Each range contains a 32-byte presence index containing one bit for
+each of its 256 possible codepoints.
 
 8. Range Index
 
@@ -240,7 +260,7 @@ Each 256-codepoint range contains an index file.
 
 Example:
 
-F200/index
+00F200/index
 
 
 The index contains exactly:
@@ -259,7 +279,7 @@ the index contains one presence bit per possible codepoint.
 
 8.1 Bit Mapping
 
-For F200/index:
+For 00F200/index:
 
 bit 0    → U+F200
 bit 1    → U+F201
@@ -301,16 +321,16 @@ F2C0 – F2DF
 F2E0 – F2FF
 
 
-Corresponding files are named after the first codepoint in the chunk:
+Corresponding files are named after the first codepoint in the chunk, using the same six uppercase hexadecimal digits as range directories:
 
-F200.bmp
-F220.bmp
-F240.bmp
-F260.bmp
-F280.bmp
-F2A0.bmp
-F2C0.bmp
-F2E0.bmp
+00F200.bmp
+00F220.bmp
+00F240.bmp
+00F260.bmp
+00F280.bmp
+00F2A0.bmp
+00F2C0.bmp
+00F2E0.bmp
 
 9.1 Fixed 32-Glyph Layout
 
@@ -318,7 +338,7 @@ A bitmap chunk always has 32 fixed glyph slots.
 
 For:
 
-F240.bmp
+00F240.bmp
 
 
 the slots are:
@@ -345,7 +365,7 @@ A bitmap chunk is created only when at least one of its 32 glyphs exists.
 
 However, once the chunk exists, it always contains all 32 fixed slots.
 
-Slots corresponding to unavailable glyphs are unused/zeroed.
+Slots corresponding to unavailable glyphs are unused and filled with the background colour. They are never read, because their index bit is clear.
 
 This deliberately trades some space inside a partially populated 32-glyph chunk for:
 
@@ -366,12 +386,12 @@ U+F247
 the lookup proceeds as follows.
 
 Step 1 — Determine the 256-codepoint range
-U+F247 → F200
+U+F247 → 00F200
 
 
 Look for:
 
-F200/
+00F200/
 
 
 If the range does not exist, the glyph is unavailable.
@@ -380,7 +400,7 @@ Step 2 — Check the presence index
 
 Open:
 
-F200/index
+00F200/index
 
 
 Calculate:
@@ -395,17 +415,17 @@ If the bit is clear:
 glyph unavailable
 
 Step 3 — Determine the 32-codepoint chunk
-chunk = codepoint & 0xE0;
+chunk = codepoint & ~0x1Fu;
 
 
 For U+F247:
 
-F247 & FFE0 = F240
+F247 & ~0x1F = F240
 
 
 Therefore:
 
-F200/F240.bmp
+00F200/00F240.bmp
 
 Step 4 — Determine the glyph slot
 slot = codepoint & 0x1F;
@@ -427,7 +447,7 @@ For a 16×16 1bpp font:
 7 × 32 = 224
 
 
-The glyph begins at byte 224 in F240.bmp.
+The glyph begins at byte 224 in 00F240.bmp.
 
 11. Missing Glyph Handling
 
@@ -493,9 +513,11 @@ U+F245
 Then:
 
 regular16/
-└── F200/
+├── info
+├── undefined.bmp
+└── 00F200/
     ├── index
-    └── F240.bmp
+    └── 00F240.bmp
 
 
 index marks:
@@ -507,7 +529,7 @@ F245 = present
 
 All other codepoints in F200–F2FF are absent.
 
-F240.bmp still contains 32 slots:
+00F240.bmp still contains 32 slots:
 
 slot 0  → F240
 slot 1  → F241
@@ -519,9 +541,9 @@ slot 5  → F245
 slot 31 → F25F
 
 
-The unused slots contain zero/unused bitmap data.
+The unused slots contain background-filled, unused bitmap data.
 
-No F200.bmp, F220.bmp, F260.bmp, etc. are created unless at least one glyph in those ranges exists.
+No 00F200.bmp, 00F220.bmp, 00F260.bmp, etc. are created unless at least one glyph in those ranges exists.
 
 14. Deliberate Non-Goals
 
@@ -548,8 +570,8 @@ fonts/
     │
     └── CodepointRange/
         ├── index             32 bytes
-        ├── XXXX.bmp          32 glyph slots
-        ├── XXXX.bmp
+        ├── XXXXXX.bmp        32 glyph slots
+        ├── XXXXXX.bmp
         └── ...
 
 
@@ -585,3 +607,8 @@ native e-ink framebuffer representation
 
 
 The resulting lookup is deterministic and requires no search or per-glyph location metadata.
+
+uint32_t range = codepoint & ~0xFFu;
+uint32_t slot  = codepoint & 0xFFu;
+uint32_t chunk = codepoint & ~0x1Fu;
+uint32_t glyph = codepoint & 0x1Fu;
