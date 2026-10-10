@@ -4,7 +4,7 @@ Bitmap Font Storage Format
 The font system is intended primarily for:
 
 Normal text rendering.
-Selected Nerd Font symbols/icons.
+Selected Nerd Font symbols/icons and emoji, usable inline in text.
 Multiple font sizes.
 Multiple visual styles such as regular, bold, and italic.
 Direct use with the e-ink framebuffer.
@@ -29,7 +29,7 @@ Be simple to read from LittleFS.
 Be extensible through a format version.
 3. Directory Structure
 
-Fonts are organized first by visual style and nominal size.
+Fonts are organized first by visual style and cell height.
 
 fonts/
 ├── regular16/
@@ -40,6 +40,10 @@ fonts/
 │   │   ├── 00F200.bmp
 │   │   ├── 00F220.bmp
 │   │   └── 00F240.bmp
+│   ├── 01F600/
+│   │   ├── wide
+│   │   ├── index
+│   │   └── 01F600.bmp
 │   └── ...
 │
 ├── bold16/
@@ -59,7 +63,7 @@ fonts/
 
 Type/size directory
 
-The directory name describes the intended font style and nominal size.
+The directory name describes the font style and the cell height in pixels.
 
 Examples:
 
@@ -72,7 +76,7 @@ bolditalic16
 regular16inv
 
 
-The actual raster dimensions and baseline are obtained from info; the nominal size in the directory name is primarily an identifier.
+The number is the cell height, which is also the line pitch for layout. It must match the height in info; the cell width and baseline come from info. For example, regular16 may use 8×16 text cells.
 
 An optional inv suffix marks a visually inverted variant (white glyphs on a black cell), for example regular16inv. It uses exactly the same format; only the rendered glyphs differ, so the renderer handles it like any other font.
 
@@ -133,7 +137,7 @@ The field is retained so that future versions can potentially support other pixe
 
 Width
 
-Glyph cell width in pixels.
+Glyph cell width in pixels. It should be a multiple of 8 so glyph rows can be copied byte-for-byte into the framebuffer (see Bitmap Representation). Glyphs in wide ranges use cells twice this width (see Wide Ranges).
 
 Height
 
@@ -153,22 +157,26 @@ The font uses fixed-size glyph cells.
 
 For a font with:
 
-width  = 16
+width  = 8
 height = 16
 bpp    = 1
 
 
-every glyph occupies a 16×16 pixel cell.
+every glyph occupies an 8×16 pixel cell, and the renderer advances by the cell width after each glyph.
 
-No per-glyph width, height, or advance-width metadata is stored.
+Cells need not be square. Their width varies only per 256-codepoint range: a range is either normal (width) or wide (2 × width, see Wide Ranges). No per-glyph width, height, or advance-width metadata is stored.
 
 The number of bytes occupied by a glyph is derived from the metadata:
 
-row_bytes = (width + 7) / 8;
+cell_width  = wide ? 2 * width : width;
+row_bytes   = (cell_width + 7) / 8;
 glyph_bytes = row_bytes * height;
 
 
 For example:
+
+8 × 16 @ 1bpp
+= 16 bytes/glyph (wide 16 × 16: 32 bytes/glyph)
 
 16 × 16 @ 1bpp
 = 32 bytes/glyph
@@ -212,6 +220,8 @@ The most significant bit of each byte is the leftmost pixel.
 A 1 bit is white (paper); a 0 bit is black (ink).
 Each row starts on a byte boundary. When width is not a multiple of 8, the padding bits at the end of each row hold the background colour.
 
+When the cell width is a multiple of 8 and a glyph is drawn at an x position that is a multiple of 8, each glyph row is copied into the framebuffer byte-for-byte. Wide cells are twice as wide, so they keep this alignment. Other widths or positions are valid but need bit shifting.
+
 An inverted variant (see Directory Structure) stores white glyphs on a black background in the same representation.
 
 This allows the glyph data to be used without converting between incompatible pixel formats.
@@ -253,6 +263,28 @@ For example, 00F200/ represents U+F200 – U+F2FF.
 
 Each range contains a 32-byte presence index containing one bit for
 each of its 256 possible codepoints.
+
+7.2 Wide Ranges
+
+Emoji and icons need more horizontal space than a text cell. A range directory may contain a file named:
+
+wide
+
+
+Its presence marks every glyph in the range as two cells wide (2 × width). The file is empty; only its existence matters.
+
+Example:
+
+01F600/wide
+
+
+The whole range is either wide or normal. This matches Unicode, where emoji and icon blocks (for example U+1F300–U+1FAFF, or the Nerd Font icons in U+E000–U+F8FF) contain only symbols. Normal-width symbols that share a range with wide ones are drawn two cells wide too.
+
+Lookup returns the glyph bitmap together with its cell width, so the renderer handles text, icons and emoji the same way:
+
+glyph = lookup(codepoint);
+copy(glyph, x, y);
+x += glyph.width;
 
 8. Range Index
 
@@ -357,7 +389,7 @@ slot = codepoint & 0x1F;
 offset = slot * glyph_bytes;
 
 
-No offset table is required.
+No offset table is required. glyph_bytes is the one for the range's cell width (see Glyph Cells).
 
 9.2 Missing Glyph Slots
 
@@ -395,6 +427,8 @@ Look for:
 
 
 If the range does not exist, the glyph is unavailable.
+
+Check whether 00F200/wide exists. If it does, the cell width is 2 × width; otherwise it is width. This also decides glyph_bytes.
 
 Step 2 — Check the presence index
 
@@ -449,6 +483,8 @@ For a 16×16 1bpp font:
 
 The glyph begins at byte 224 in 00F240.bmp.
 
+The lookup result is the glyph bitmap and its cell width.
+
 11. Missing Glyph Handling
 
 A glyph that is not present in the compiled font does not need a bitmap entry.
@@ -465,11 +501,15 @@ bold16/undefined.bmp
 italic16/undefined.bmp
 
 
-It contains exactly one glyph-sized bitmap using the same bitmap format as normal glyphs.
+It contains exactly one normal-width glyph bitmap using the same bitmap format as normal glyphs.
 
 The font lookup layer can report that a glyph is unavailable, and the renderer can use the undefined glyph.
 
 The storage layer should use a pointer/result indicating absence rather than using the null character ('\0') as a missing-glyph marker. U+0000 is itself a valid Unicode codepoint.
+
+11.1 Invisible Characters
+
+The format has no zero-width glyphs. Invisible characters that appear in emoji text, such as the zero-width joiner U+200D and the variation selectors U+FE0E and U+FE0F, are stored as blank normal-width glyphs. A sequence like U+2764 U+FE0F (❤️) therefore renders as the heart followed by a blank cell, and a ZWJ sequence renders as its component emoji separated by blank cells, without any special handling in the renderer.
 
 12. Storage Efficiency
 
@@ -483,6 +523,13 @@ A 256-codepoint range requires only:
 Bitmap storage is allocated only for 32-codepoint chunks containing at least one glyph.
 
 Within an existing chunk, glyph positions are fixed and therefore require no offset table.
+
+For an 8×16 1bpp font:
+
+1 glyph      = 16 bytes
+32 glyphs    = 512 bytes
+wide glyph   = 32 bytes (16×16)
+
 
 For a 16×16 1bpp font:
 
@@ -551,8 +598,10 @@ The following are not part of the current format:
 
 TTF/OTF files on the ESP32.
 Runtime font rasterization.
-Per-glyph variable dimensions.
+Per-glyph variable dimensions (width varies only per range: normal or wide).
 Per-glyph advance widths.
+Zero-width glyphs and multi-codepoint sequences (ligatures, combined emoji ZWJ sequences).
+Colour emoji.
 Per-glyph offsets.
 Binary-search-based glyph lookup.
 A global Unicode glyph table.
@@ -570,6 +619,7 @@ fonts/
     │
     └── CodepointRange/
         ├── index             32 bytes
+        ├── wide              optional, empty: 2-cell glyphs
         ├── XXXXXX.bmp        32 glyph slots
         ├── XXXXXX.bmp
         └── ...
@@ -579,7 +629,7 @@ Where:
 
 TypeSize
     ↓
-font style + nominal size
+font style + cell height
 
 info
     ↓
@@ -612,3 +662,4 @@ uint32_t range = codepoint & ~0xFFu;
 uint32_t slot  = codepoint & 0xFFu;
 uint32_t chunk = codepoint & ~0x1Fu;
 uint32_t glyph = codepoint & 0x1Fu;
+uint32_t cell  = wide ? 2 * width : width;   /* wide = RANGE/wide exists */
